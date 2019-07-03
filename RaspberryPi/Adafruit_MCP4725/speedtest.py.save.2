@@ -1,0 +1,198 @@
+
+#!/usr/bin/python
+from Adafruit_MCP4725 import MCP4725
+import time
+import math
+import os
+os.system('modprobe i2c_bcm2708 baudrate=800000')
+def lev(V):
+	return int(V/5.0*4095)
+
+centerx = 0.85
+centery = 3.65;
+dac=MCP4725(0x62)
+dacY=MCP4725(0x63)
+x=0
+mode = 6
+try:
+	if mode==1:
+		# max speed square wave
+		begin = time.time()
+		while True:
+			dac.setVoltage(0)
+			dacY.setVoltage(0)
+			bob1 = time.time()-begin
+			dac.setVoltage(4095)
+			dacY.setVoltage(4095)
+			bob2 = time.time()-begin
+			bob12 = (int(bob1*100000)/33 )%4096
+			bob22 = (int(bob2*100000)/33 )%4096
+			print bob12, bob22
+			dac.setVoltage(0)
+			dacY.setVoltage(0)
+			bob1 = time.time()-begin
+			dac.setVoltage(4095)
+			dacY.setVoltage(4095)
+			bob2 = time.time()-begin
+			bob12 = (int(bob1*100000)/33 )%4096
+			bob22 = (int(bob2*100000)/33 )%4096
+			print bob12, bob22
+			
+			
+	elif mode ==2:
+		# horizontal line
+		period = 1/25.0 #in seconds
+		t_interval = .000333 #"avg" update speed of RPi 
+		numpts = int(period/t_interval)
+		incx = 4.5/(numpts/2)
+		list = []
+		iX = -4.5
+		while iX < 4.5:
+			list.append(lev(abs(iX)))
+			iX = iX + incx	
+		#print list
+		begin = time.time()
+		pointY = lev(centery)
+		#print len(list),numpts
+		while(True):
+			point = int((time.time()-begin)/t_interval) % numpts
+			dacY.setVoltage(pointY)
+			dac.setVoltage(list[point])
+
+	elif mode ==3:
+		pattern = file('ncsuraster.txt','r')
+		patternlist=eval(pattern.read())
+		while (True):
+			for pair in patternlist:
+				dac.setVoltage(int(pair[0]))
+				dacY.setVoltage(int(pair[1]))
+	elif mode ==4:
+		#raster L shape
+		#make pattern
+		speed = 150;
+		maxpts = 2800;
+		numpts = maxpts/speed
+		l=[]
+		minX=.8
+		maxX = minX + 2.5
+		minY=4
+		maxY = minY-2.5
+		incX = (maxX-minX)/(numpts/4)
+		incY = (maxY-minY)/(numpts/4)
+		iX=minX
+		iY=minY
+		while iX<(maxX):
+			l.append([round(iX,5),minY])
+			iX=iX+incX
+		iX=maxX-incX/2
+		while iX > (minX+incX/4):
+			l.append([round(iX,5),minY])
+			iX=iX-incX
+		while iY>(maxY):
+			l.append([minX,round(iY,5)])
+			iY=iY+incY
+		iY=maxY-incY/2
+		while iY < (minY+incY/4):
+			l.append([minX,round(iY,5)])
+			iY=iY-incY
+		#run pattern
+		ib = 0
+		while (ib< 10):
+			for pair in l:
+				dac.setVoltage(lev(pair[0]))
+				dacY.setVoltage(lev(pair[1]))
+				print "%.7f" % time.time()
+			ib = ib+1
+	elif mode ==5:
+		#set to single point
+		dac.setVoltage(lev(3.7))
+		dacY.setVoltage(lev(3.95))
+		while True:
+			time.sleep(1)
+	elif mode == 6:
+		t_interval = .000333
+		t_intervaly = .00333
+		periodx = 1/25.0
+		numptsx = int(periodx/t_interval)
+		maxX = 4.5
+		minX = 0.0
+		deltax = maxX-minX
+		incx = float(deltax)/(numptsx/2)
+		listX = []
+		iX = -deltax
+		while iX < deltax:
+			listX.append(lev(abs(iX)+minX))
+			iX = iX+incx
+		periody = 2000
+		numptsy = int(periody/t_intervaly)
+		maxY = 4.5
+		minY = 1.5
+		deltay = maxY-minY
+		incy = float(deltay)/(numptsy/2)
+		listY = []
+		iY = -deltay
+		while iY < deltay:
+			listY.append(lev(abs(iY)+minY))
+			iY = iY+incy
+		begin = time.time()
+		file_write_timer = begin+5
+		print begin, periodx, periody, t_interval
+		while(True):
+			pointx = int((time.time()-begin)/t_interval) % numptsx
+			pointy = int((time.time()-begin)/t_intervaly) % numptsy
+			#print pointx, pointy, listX[1],listY[1]
+			dacY.setVoltage(listY[pointy])
+			dac.setVoltage(listX[pointx])
+			if time.time()>file_write_timer:
+				with open('writtenvoltage.txt','w') as f:
+					f.write(str(listY[pointy]))
+				file_write_timer = time.time()+5
+		
+
+
+
+	elif mode == 7:
+		speedx = 70
+		speedy = .001
+		maxpts = 2900
+		numptsx = maxpts/speedx
+		numptsy = maxpts/speedy
+		maxX = 4.5
+		minX = 0
+		maxY = 4.5
+		minY = 2
+		incx = float(maxX-minX)/(numptsx/2)
+		incy = float(maxY-minY)/(numptsy/2)
+		listX = []
+		listY = []
+		print minX, maxX, speedx, minY, maxY, speedy, incx, incy;
+		bob = minX
+		while bob < maxX:
+			listX.append(lev(bob))
+			bob = bob + incx
+		while bob > minX:
+			bob = bob - incx
+			listX.append(lev(bob))
+		bob = minY
+		while bob < maxY:
+			listY.append(lev(bob))
+			bob = bob + incy
+		while bob > minY:
+			bob = bob - incy
+			listY.append(lev(bob))
+		lenX = len(listX)
+		lenY = len(listY)
+		timer = int(1.0/(min(speedx, speedy))*5*maxpts)
+		while (True):
+			for i in range(0,timer):
+				dac.setVoltage(listX[i % lenX])
+				dacY.setVoltage(listY[i % lenY])
+
+
+except KeyboardInterrupt:
+	dac.setVoltage(0)
+	dacY.setVoltage(0)
+
+
+dac.setVoltage(0)
+dacY.setVoltage(0)

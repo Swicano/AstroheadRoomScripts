@@ -1,0 +1,94 @@
+#!/usr/bin/python
+from Adafruit_MCP4725 import MCP4725
+import time
+import math
+import os
+os.system('modprobe i2c_bcm2708 baudrate=800000')
+def lev(V):
+	return int(V/5.0*4096)
+
+centerx = 0.85
+centery = 3.80;
+dac=MCP4725(0x62)
+dacY=MCP4725(0x63)
+x=0
+mode =2
+try:
+	if mode==1:
+		# max speed square wave
+		while x<100000:
+			dac.setVoltage(0)
+			dac.setVoltage(4096)
+			x=x+1
+		x=0
+	elif mode ==2:
+		# horizonral line
+		speed = 90; 
+		print speed
+		maxpts = 5000;
+		numpts = maxpts/speed
+		incx = 4.5/(numpts/2)
+		list = []
+		iX = -4.5
+		while iX < 4.5:
+			list.append(abs(iX))
+			iX = iX + incx	
+		dacY.setVoltage(lev(centery))
+		while(True):
+			for point in list:
+				dac.setVoltage(lev(point))
+
+	elif mode ==3:
+		pattern = file('ncsuraster.txt','r')
+		patternlist=eval(pattern.read())
+		while (True):
+			for pair in patternlist:
+				dac.setVoltage(int(pair[0]))
+				dacY.setVoltage(int(pair[1]))
+	elif mode ==4:
+		#raster L shape
+		#make pattern
+		speed = 150;
+		maxpts = 2800;
+		numpts = maxpts/speed
+		l=[]
+		minX=.8
+		maxX = minX + 2.5
+		minY=4
+		maxY = minY-2.5
+		incX = (maxX-minX)/(numpts/4)
+		incY = (maxY-minY)/(numpts/4)
+		iX=minX
+		iY=minY
+		while iX<(maxX):
+			l.append([round(iX,5),minY])
+			iX=iX+incX
+		iX=maxX-incX/2
+		while iX > (minX+incX/4):
+			l.append([round(iX,5),minY])
+			iX=iX-incX
+		while iY>(maxY):
+			l.append([minX,round(iY,5)])
+			iY=iY+incY
+		iY=maxY-incY/2
+		while iY < (minY+incY/4):
+			l.append([minX,round(iY,5)])
+			iY=iY-incY
+		#run pattern
+		while (True):
+			for pair in l:
+				dac.setVoltage(lev(pair[0]))
+				dacY.setVoltage(lev(pair[1]))
+	elif mode ==5:
+		dac.setVoltage(lev(3.7))
+		dacY.setVoltage(lev(3.95))
+		while True:
+			time.sleep(1)
+
+except KeyboardInterrupt:
+	dac.setVoltage(0)
+	dacY.setVoltage(0)
+
+
+dac.setVoltage(0)
+dacY.setVoltage(0)
